@@ -1,0 +1,71 @@
+version: "3.7"
+services:
+  promml:
+    container_name: promml
+    build: .
+    image: promml:latest
+    ports:
+     - "8080:8080"
+    networks:
+     - local_net
+    restart: always
+    command:
+      - "./main"
+      - "--remoteWrite.urls=http://victoriametrics:8428/api/v1/write"
+      - "--releaseAfterSeconds=5"
+      - "--batchSize=1000"
+      - "--workers=4"
+      - "--debug"
+  vmagent:
+    container_name: vmagent
+    image: victoriametrics/vmagent
+    depends_on:
+      - "promml"
+    ports:
+      - 8429:8429
+    volumes:
+      - vmagentdata:/vmagentdata
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - "--promscrape.config=/etc/prometheus/prometheus.yml"
+      - "--remoteWrite.url=http://promml:8080/write"
+      - "-remoteWrite.showURL"
+    networks:
+      - local_net
+    restart: always
+  victoriametrics:
+    container_name: victoriametrics
+    image: victoriametrics/victoria-metrics
+    ports:
+      - 8428:8428
+    volumes:
+      - vmdata:/storage
+    command:
+      - "--storageDataPath=/storage"
+      - "--httpListenAddr=:8428"
+      - "--maxLabelsPerTimeseries=1000"
+    networks:
+      - local_net
+    restart: always
+  grafana:
+    container_name: grafana
+    image: grafana/grafana
+    depends_on:
+      - "victoriametrics"
+      - "vmagent"
+      - "promml"
+    ports:
+      - 3000:3000
+    volumes:
+      - grafanadata:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning
+      - ./dashboards:/var/lib/grafana/dashboards
+    networks:
+      - local_net
+    restart: always
+volumes:
+  vmagentdata: {}
+  vmdata: {}
+  grafanadata: {}
+networks:
+  local_net:

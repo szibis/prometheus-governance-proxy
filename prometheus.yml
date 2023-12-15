@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: 'vmagent'
+    static_configs:
+      - targets: ['vmagent:8429']
+        labels:
+           source: 'vmagent'
+  - job_name: 'promml'
+    scrape_interval: 1s
+    static_configs:
+      - targets: ['promml:8080']
+        labels:
+           source: 'promml'
