@@ -16,5 +16,5 @@ cardinalityLimit:
   capacity: 100
   # Cardinality threshold to trigger limit action
   limit: 1000
-  # Mode of cardinality limitation, can be drop_metric, drop_tag, last_100
+  # Mode of cardinality limitation, can be drop_metric, drop_tag
   mode: last_100

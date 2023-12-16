@@ -24,7 +24,7 @@ type Config struct {
 type CardinalityLimit struct {
 	Capacity int    `yaml:"capacity"` // Number of unique values to store per tag
 	Limit    int    `yaml:"limit"`    // Cardinality threshold to trigger limit action
-	Mode     string `yaml:"mode"`     // Mode of cardinality limitation: drop_metric, drop_tag, last_100
+	Mode     string `yaml:"mode"`     // Mode of cardinality limitation: drop_metric, drop_tag
 }
 
 // readConfig reads a config file and unmarshals it into a Config struct

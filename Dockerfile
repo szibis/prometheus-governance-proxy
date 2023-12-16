@@ -10,7 +10,7 @@ WORKDIR /app
 COPY src/*.go .
 
 # Init go modules
-RUN go mod init favicon_sraper && go mod tidy
+RUN go mod init prometheus-governance-proxy && go mod tidy
 
 # Run unit tests
 RUN go test -bench=. -benchtime=10s
