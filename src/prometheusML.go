@@ -10,6 +10,9 @@ import (
 	"flag"
 	"time"
   "bytes"
+  "sync"
+  "container/list"
+  "os"
 
 	"github.com/golang/snappy"
 	"github.com/golang/protobuf/proto"
@@ -23,11 +26,83 @@ type WorkItem struct {
 	debug     bool
 }
 
+type MetricTag struct {
+	Metric string
+	Tag    string
+}
+
+type ValueChange struct {
+	Previous string
+	Current  string
+}
+
+type MetricsData struct {
+	sync.RWMutex
+	Metrics map[string]map[string]*TagData
+}
+
+type TagData struct {
+	Capacity    int
+	Cardinality int
+	Values      *list.List
+}
+
+var metricsData = MetricsData{
+	Metrics: make(map[string]map[string]*TagData),
+}
+
 // Hash function to create a consistent hash of the metric name
 func hash(s string) uint32 {
 	h := fnv.New32a()
 	h.Write([]byte(s))
 	return h.Sum32()
+}
+
+func handleCardinalityLimitation(metricName string, labelName string, cardinalityLimit int, cardinalityLimitMode string) {
+	metricsData.Lock()
+	defer metricsData.Unlock()
+
+	if metricLabels, ok := metricsData.Metrics[metricName]; ok {
+		if tagData, ok := metricLabels[labelName]; ok { 
+			switch cardinalityLimitMode {
+			case "drop_metric":
+				if tagData.Cardinality > cardinalityLimit {
+					fmt.Println("Dropping metric due to cardinality limit for metric:", metricName, "and tag:", labelName)
+					delete(metricsData.Metrics, metricName)
+				}
+
+			case "drop_tag":
+				if tagData.Cardinality > cardinalityLimit {
+					fmt.Println("Dropping tag due to cardinality limit for metric:", metricName, "and tag:", labelName)
+					delete(metricsData.Metrics[metricName], labelName)
+				}
+					
+			case "last_100":
+				if len(metricsData.Metrics[metricName]) > 100 {
+					cutOffTag := getNthKey(metricsData.Metrics[metricName], 100)
+					fmt.Println("Limiting tags to last 100 for metric:", metricName, "and tag:", cutOffTag)
+					delete(metricsData.Metrics[metricName], cutOffTag)
+				}
+					
+			default:
+				fmt.Println("Error: Invalid cardinalityLimitMode:", cardinalityLimitMode)
+				os.Exit(1)
+			}
+
+		}
+	}
+}
+
+// Given a map and an index n, it returns the name of the nth key.
+func getNthKey(m map[string]*TagData, n int) string {
+	i := 0
+	for key := range m {
+		if i == n {
+			return key
+		}
+		i++
+	}
+	return ""
 }
 
 // Send function to send the given metrics to the given endpoint
@@ -131,8 +206,7 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
 	}
 }
 
-// HandleMetrics function to handle incoming metrics
-func handleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- WorkItem, endpoints []string, debug bool) {
+func handleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- WorkItem, endpoints []string, debug bool, cardinalityCapacity int, cardinalityLimit int, cardinalityLimitMode string) {
 	if r.Method == http.MethodPost {
 		compressed, _ := ioutil.ReadAll(r.Body)
 
@@ -153,6 +227,65 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- Work
 		// Process each TimeSeries in the WriteRequest
 		for _, ts := range req.Timeseries {
 			workItems <- WorkItem{ts: ts, endpoints: endpoints, debug: debug}
+			
+			metricName := ""
+			for _, label := range ts.Labels {
+				if label.Name == "__name__" {
+					metricName = label.Value
+					break
+				}
+			}
+
+			// If metric name is not found, continue to next TimeSeries
+			if metricName == "" {
+				continue
+			}
+
+			metricsData.Lock()
+		
+			for _, label := range ts.Labels {
+				if label.Name == "__name__" {
+					continue // Omit __name__ tag
+				}
+				if _, ok := metricsData.Metrics[metricName]; !ok {
+					metricsData.Metrics[metricName] = make(map[string]*TagData)
+				}
+				if _, ok := metricsData.Metrics[metricName][label.Name]; !ok {
+					metricsData.Metrics[metricName][label.Name] = &TagData{
+						Capacity:    cardinalityCapacity,
+						Cardinality: 0,
+						Values:      list.New(),
+					}
+				}
+
+				tagData := metricsData.Metrics[metricName][label.Name]
+
+				// Check if this tag value is already stored
+				found := false
+				for e := tagData.Values.Front(); e != nil; e = e.Next() {
+					if e.Value.(string) == label.Value {
+						found = true
+						break
+					}
+				}
+				if !found {
+					// Increment cardinality
+					tagData.Cardinality++
+
+					// Add new tag value to the stored values
+					tagData.Values.PushBack(label.Value)
+
+					// Spawn a goroutine to handle cardinality limitation
+					go handleCardinalityLimitation(metricName, label.Name, cardinalityLimit, cardinalityLimitMode)
+
+					// Check if we need to remove the oldest value
+					if tagData.Values.Len() > tagData.Capacity {
+						tagData.Values.Remove(tagData.Values.Front())
+					}
+				}
+			}
+			
+			metricsData.Unlock()
 		}
 	}
 }
@@ -164,11 +297,19 @@ func main() {
 	var workers int
 	var batchSize int
 	var releaseAfterSeconds int
+  var cardinalityCapacity int
+  var jsonMinCardinality int
+  var cardinalityLimit int
+  var cardinalityLimitMode string
 	flag.StringVar(&remoteWriteURLs, "remoteWrite.urls", "", "Comma-separated list of remote write endpoints")
 	flag.BoolVar(&debug, "debug", false, "Print metrics to stdout")
 	flag.IntVar(&workers, "workers", 1, "Number of worker goroutines")
 	flag.IntVar(&batchSize, "batchSize", 100, "Number of TimeSeries to batch before sending")
 	flag.IntVar(&releaseAfterSeconds, "releaseAfterSeconds", 10, "Number of seconds to wait before releasing a batch")
+	flag.IntVar(&cardinalityCapacity, "cardinalityCapacity", 100, "Number of unique values to store per tag")
+	flag.IntVar(&jsonMinCardinality, "jsonMinCardinality", 0, "Minimum cardinality to include in the output JSON")
+  flag.IntVar(&cardinalityLimit, "cardinalityLimit", 0, "Cardinality threshold to trigger limit action")
+  flag.StringVar(&cardinalityLimitMode, "cardinalityLimitMode", "", "Mode of cardinality limitation: drop_metric, drop_tag, last_100")
 	flag.Parse()
 
 	// Split the flag value into a slice of endpoints
@@ -182,9 +323,35 @@ func main() {
 		go worker(workItems, batchSize, time.Duration(releaseAfterSeconds)*time.Second)
 	}
 
+	// Handle incoming metrics and post work items for workers
 	http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
-		handleMetrics(w, r, workItems, endpoints, debug)
+   	handleMetrics(w, r, workItems, endpoints, debug, cardinalityCapacity, cardinalityLimit, cardinalityLimitMode)
 	})
+
+  // Expose metrics cardinality as JSON
+  http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
+    metricsData.RLock()
+    defer metricsData.RUnlock()  // make sure the lock is always released
+
+    data := make(map[string]map[string]map[string]int)
+
+    for metric, labels := range metricsData.Metrics {
+      for label, tagData := range labels {
+        if tagData.Cardinality > jsonMinCardinality {
+          if _, exists := data[metric]; !exists {
+            data[metric] = make(map[string]map[string]int)
+            data[metric]["tags"] = make(map[string]int)
+          }
+          data[metric]["tags"][label] = tagData.Cardinality
+        }
+      }
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]interface{}{"cardinality": data})
+  })
+
+	// Expose Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
 
 	fmt.Println("Server is listening on port 8080")

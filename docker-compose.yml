@@ -15,7 +15,10 @@ services:
       - "--releaseAfterSeconds=5"
       - "--batchSize=1000"
       - "--workers=4"
-      - "--debug"
+      - "--debug=false"
+      - "--jsonMinCardinality=2"
+      - "--cardinalityLimit=100"
+      - "--cardinalityLimitMode=drop_tag"
   vmagent:
     container_name: vmagent
     image: victoriametrics/vmagent
