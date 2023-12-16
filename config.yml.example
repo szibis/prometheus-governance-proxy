@@ -1,0 +1,20 @@
+# Comma-separated list of remote write endpoints.
+remoteWriteURLs: "http://localhost:8080/receive,http://localhost:8090/receive"
+# Print metrics to stdout (true or false)
+debug: false
+# Number of worker goroutines.
+workers: 1
+# Number of TimeSeries to batch before sending.
+batchSize: 100
+# Number of seconds to wait before releasing a batch
+releaseAfterSeconds: 10
+# Minimum cardinality to include in the output JSON
+jsonMinCardinality: 0
+# Parameters for Cardinality Limitation
+cardinalityLimit:
+  # Number of unique values to store per tag
+  capacity: 100
+  # Cardinality threshold to trigger limit action
+  limit: 1000
+  # Mode of cardinality limitation, can be drop_metric, drop_tag, last_100
+  mode: last_100

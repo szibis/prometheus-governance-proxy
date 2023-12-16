@@ -291,65 +291,53 @@ func handleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- Work
 }
 
 func main() {
-	// Define the --remoteWrite.urls, --debug, --workers, and --batchSize flags
-	var remoteWriteURLs string
-	var debug bool
-	var workers int
-	var batchSize int
-	var releaseAfterSeconds int
-  var cardinalityCapacity int
-  var jsonMinCardinality int
-  var cardinalityLimit int
-  var cardinalityLimitMode string
-	flag.StringVar(&remoteWriteURLs, "remoteWrite.urls", "", "Comma-separated list of remote write endpoints")
-	flag.BoolVar(&debug, "debug", false, "Print metrics to stdout")
-	flag.IntVar(&workers, "workers", 1, "Number of worker goroutines")
-	flag.IntVar(&batchSize, "batchSize", 100, "Number of TimeSeries to batch before sending")
-	flag.IntVar(&releaseAfterSeconds, "releaseAfterSeconds", 10, "Number of seconds to wait before releasing a batch")
-	flag.IntVar(&cardinalityCapacity, "cardinalityCapacity", 100, "Number of unique values to store per tag")
-	flag.IntVar(&jsonMinCardinality, "jsonMinCardinality", 0, "Minimum cardinality to include in the output JSON")
-  flag.IntVar(&cardinalityLimit, "cardinalityLimit", 0, "Cardinality threshold to trigger limit action")
-  flag.StringVar(&cardinalityLimitMode, "cardinalityLimitMode", "", "Mode of cardinality limitation: drop_metric, drop_tag, last_100")
+	// Define the --config-file flag
+	var configFile string
+	flag.StringVar(&configFile, "config-file", "config.yml", "The name of the YAML configuration file")
 	flag.Parse()
 
-	// Split the flag value into a slice of endpoints
-	endpoints := strings.Split(remoteWriteURLs, ",")
+	// Initialize the config
+	config := &Config{}
+	config.readConfig(configFile)
+
+	// Split the config value into a slice of endpoints
+	endpoints := strings.Split(config.RemoteWriteURLs, ",")
 
 	// Create a buffered channel for work items
 	workItems := make(chan WorkItem, 100)
 
 	// Start the worker goroutines
-	for i := 0; i < workers; i++ {
-		go worker(workItems, batchSize, time.Duration(releaseAfterSeconds)*time.Second)
+	for i := 0; i < config.Workers; i++ {
+		go worker(workItems, config.BatchSize, time.Duration(config.ReleaseAfterSeconds)*time.Second)
 	}
 
 	// Handle incoming metrics and post work items for workers
 	http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
-   	handleMetrics(w, r, workItems, endpoints, debug, cardinalityCapacity, cardinalityLimit, cardinalityLimitMode)
+		handleMetrics(w, r, workItems, endpoints, config.Debug, config.CardinalityLimit.Capacity, config.CardinalityLimit.Limit, config.CardinalityLimit.Mode)
 	})
 
-  // Expose metrics cardinality as JSON
-  http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
-    metricsData.RLock()
-    defer metricsData.RUnlock()  // make sure the lock is always released
+	// Expose metrics cardinality as JSON
+	http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
+		metricsData.RLock()
+    		defer metricsData.RUnlock()  // make sure the lock is always released
 
-    data := make(map[string]map[string]map[string]int)
+    		data := make(map[string]map[string]map[string]int)
 
-    for metric, labels := range metricsData.Metrics {
-      for label, tagData := range labels {
-        if tagData.Cardinality > jsonMinCardinality {
-          if _, exists := data[metric]; !exists {
-            data[metric] = make(map[string]map[string]int)
-            data[metric]["tags"] = make(map[string]int)
-          }
-          data[metric]["tags"][label] = tagData.Cardinality
-        }
-      }
-    }
+    		for metric, labels := range metricsData.Metrics {
+      			for label, tagData := range labels {
+        			if tagData.Cardinality > config.JsonMinCardinality {
+          				if _, exists := data[metric]; !exists {
+            				data[metric] = make(map[string]map[string]int)
+            				data[metric]["tags"] = make(map[string]int)
+          				}
+          				data[metric]["tags"][label] = tagData.Cardinality
+        			}
+      			}
+    		}
 
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(map[string]interface{}{"cardinality": data})
-  })
+    		w.Header().Set("Content-Type", "application/json")
+    		json.NewEncoder(w).Encode(map[string]interface{}{"cardinality": data})
+	})
 
 	// Expose Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())

@@ -9,16 +9,11 @@ services:
     networks:
      - local_net
     restart: always
+    volumes:
+      - ./config.yml:/app/config.yml
     command:
       - "./main"
-      - "--remoteWrite.urls=http://victoriametrics:8428/api/v1/write"
-      - "--releaseAfterSeconds=5"
-      - "--batchSize=1000"
-      - "--workers=4"
-      - "--debug=false"
-      - "--jsonMinCardinality=2"
-      - "--cardinalityLimit=100"
-      - "--cardinalityLimitMode=drop_tag"
+      - "--config-file=config.yml"
   vmagent:
     container_name: vmagent
     image: victoriametrics/vmagent
