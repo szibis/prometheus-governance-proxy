@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf"
 	"github.com/golang/snappy"
 	"github.com/prometheus/prometheus/prompb"
   "github.com/szibis/prometheus-governance-proxy/config"

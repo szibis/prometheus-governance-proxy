@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
   
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf"
 	"github.com/prometheus/prometheus/prompb"
 )
 

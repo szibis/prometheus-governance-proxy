@@ -6,7 +6,7 @@ import (
     "io/ioutil"
     "net/http"
 
-    "github.com/golang/protobuf/proto"
+    "google.golang.org/protobuf"
     "github.com/golang/snappy"
     "github.com/prometheus/prometheus/prompb"
 )

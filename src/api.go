@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"path/to/your/project/metrics"
-	"path/to/your/project/config"
+	"github.com/szibis/prometheus-governance-proxy/metrics"
+	"github.com/szibis/prometheus-governance-proxy/config"
 )
 
 func HandleMetricsCardinality(w http.ResponseWriter, configCh *config.Config) {

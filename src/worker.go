@@ -8,9 +8,7 @@ import (
 	"log"
 
 	"github.com/prometheus/prometheus/prompb"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf"
 
 	"github.com/szibis/prometheus-governance-proxy/config"
 	"github.com/szibis/prometheus-governance-proxy/stats"
