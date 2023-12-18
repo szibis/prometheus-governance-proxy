@@ -1,30 +1,26 @@
 package main
 
 import (
-    "net/http"
-    "io/ioutil"
-    "sync"
-    "fmt"
-    "github.com/golang/snappy"
-    "github.com/golang/protobuf/proto"
-    "github.com/prometheus/prometheus/prompb"
-    "container/list"
-)
+  "net/http"
+  "io/ioutil"
+  "sync"
+  "fmt"
+  "github.com/golang/snappy"
+  "github.com/golang/protobuf/proto"
+  "github.com/prometheus/prometheus/prompb"
+  "container/list"
 
-// Define WorkItem outside for your use case
-type WorkItem struct {
-    ts prompb.TimeSeries
-    endpoints []string
-    debug bool
-}
+  main "github.com/szibis/prometheus-governance-proxy"
+  "github.com/szibis/prometheus-governance-proxy/plugins"
+)
 
 func handleMetrics(
     w http.ResponseWriter,
     r *http.Request,
     workItems chan<- WorkItem,
     endpoints []string,
-    config *Config,
-    stats *Stats) {
+    config *main.Config,
+    stats *main.Stats) {
 
     if r.Method != http.MethodPost {
         return
@@ -41,6 +37,12 @@ func handleMetrics(
     if err := proto.Unmarshal(data, &req); err != nil {
         fmt.Println("Error unmarshalling the WriteRequest:", err)
         return
+    }
+
+    // Instantiate the plugins here
+    var cardinalityPlugin *plugins.Cardinality
+    if config.CardinalityLimit.Enable {
+        cardinalityPlugin = plugins.NewCardinality(config)
     }
 
     for _, ts := range req.Timeseries {
@@ -66,13 +68,13 @@ func handleMetrics(
                 continue
             }
 
-            tagDataIntf, _ := metricLabels.LoadOrStore(label.Name, &TagData{
+            tagDataIntf, _ := metricLabels.LoadOrStore(label.Name, &main.TagData{
                 Capacity:    config.CardinalityLimit.Capacity,
                 Cardinality: 0,
                 Values:      list.New(),
             })
 
-            tagData := tagDataIntf.(*TagData)
+            tagData := tagDataIntf.(*main.TagData)
 
             found := false
             for e := tagData.Values.Front(); e != nil; e = e.Next() {
@@ -98,7 +100,10 @@ func handleMetrics(
                     }
                 }
 
-                handleCardinalityLimitation(metricName, label.Name, config.CardinalityLimit.Limit, config.CardinalityLimit.Mode, stats)
+                if cardinalityPlugin != nil {
+                    cardinalityPlugin.Handle(metricName, label.Name, tagData, stats)
+                }
+
                 metricLabels.Store(label.Name, tagData)
             }
         }

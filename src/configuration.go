@@ -23,6 +23,7 @@ type Config struct {
 
 // CardinalityLimit represents the parameters for cardinality limitation.
 type CardinalityLimit struct {
+  Enable   bool   `yaml:"enable"`   // Enable or Disable the Cardinality plugin
 	Capacity int    `yaml:"capacity"` // Number of unique values to store per tag
 	Limit    int    `yaml:"limit"`    // Cardinality threshold to trigger limit action
 	Mode     string `yaml:"mode"`     // Mode of cardinality limitation: drop_metric, drop_tag
