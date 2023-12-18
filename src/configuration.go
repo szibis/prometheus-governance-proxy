@@ -17,6 +17,7 @@ type Config struct {
 	BatchSize          int              `yaml:"batchSize"`           // Number of TimeSeries to batch before sending
 	ReleaseAfterSeconds int             `yaml:"releaseAfterSeconds"` // Number of seconds to wait before releasing a batch
 	JsonMinCardinality int              `yaml:"jsonMinCardinality"`  // Minimum cardinality to include in the output JSON
+  StatsIntervalSeconds int `yaml:"stats_interval_seconds"`// StatsIntervalSeconds field of type int
 	CardinalityLimit   CardinalityLimit `yaml:"cardinalityLimit"`    // Config parameters for cardinality limit
 }
 

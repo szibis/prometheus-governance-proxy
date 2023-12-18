@@ -5,7 +5,12 @@ import (
   "sync"
 )
 
-func handleCardinalityLimitation(metricName string, labelName string, cardinalityLimit int, cardinalityLimitMode string) {
+func handleCardinalityLimitation(metricName string, 
+                                 labelName string, 
+                                 cardinalityLimit int, 
+                                 cardinalityLimitMode string, 
+                                 stats *Stats) {
+
     metricLabelsIntf, ok := metricsData.Metrics.Load(metricName)
     if !ok {
         return // No metric found, nothing to clean up
@@ -24,12 +29,18 @@ func handleCardinalityLimitation(metricName string, labelName string, cardinalit
         if tagData.Cardinality > cardinalityLimit {
             fmt.Println("Dropping metric due to cardinality limit for metric:", metricName, "and tag:", labelName)
             metricsData.Metrics.Delete(metricName)
+            
+            // Increment DroppedMetrics counter
+            stats.DroppedMetrics++
         }
 
     case "drop_tag":
         if tagData.Cardinality > cardinalityLimit {
             fmt.Println("Dropping tag due to cardinality limit for metric:", metricName, "and tag:", labelName)
             metricLabels.Delete(labelName)
+
+            // Increment DroppedTags counter
+            stats.DroppedTags++
         }
     }
 }

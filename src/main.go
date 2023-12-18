@@ -12,7 +12,10 @@ import (
   "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var lock = sync.RWMutex{}
+
 func main() {
+
   // Define the --config-file flag
   var configFile string
   flag.StringVar(&configFile, "config-file", "config.yml", "The name of the YAML configuration file")
@@ -28,14 +31,24 @@ func main() {
   // Create a buffered channel for work items
   workItems := make(chan WorkItem, 100)
 
+  // Initialize the stats
+  stats := &Stats{}
+
   // Start the worker goroutines
   for i := 0; i < config.Workers; i++ {
-    go worker(workItems, config.BatchSize, time.Duration(config.ReleaseAfterSeconds)*time.Second)
+    go worker(workItems, config.BatchSize, time.Duration(config.ReleaseAfterSeconds)*time.Second, stats)
   }
 
-  // Handle incoming metrics and post work items for workers
+  // Log the stats periodically.
+  go logStats(stats, time.Duration(config.StatsIntervalSeconds)*time.Second) // Using config.StatsIntervalSeconds
+
   http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
-    handleMetrics(w, r, workItems, endpoints, config.Debug, config.CardinalityLimit.Capacity, config.CardinalityLimit.Limit, config.CardinalityLimit.Mode)
+      handleMetrics(w, 
+                    r, 
+                    workItems, 
+                    endpoints,
+                    config,  // Pass config directly 
+                    stats)  // Passing the reference to handleMetrics
   })
 
   // Expose metrics cardinality as JSON
@@ -58,12 +71,12 @@ func main() {
               }
               return true
           })
-          
+
           return true
       })
 
       w.Header().Set("Content-Type", "application/json")
-      json.NewEncoder(w).Encode(map[string]interface{}{"cardinality": data})
+      json.NewEncoder(w).Encode(map[string]interface{}{"metrics": data})
   })
 
   // Expose Prometheus metrics
