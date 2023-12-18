@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	main "github.com/szibis/prometheus-governance-proxy"
+	//main "github.com/szibis/prometheus-governance-proxy"
 )
 
 type Cardinality struct {

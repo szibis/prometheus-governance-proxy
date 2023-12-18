@@ -10,6 +10,7 @@ import (
   "time"
 
   "github.com/prometheus/client_golang/prometheus/promhttp"
+  "github.com/szibis/prometheus-governance-proxy/plugins"
 )
 
 var lock = sync.RWMutex{}
