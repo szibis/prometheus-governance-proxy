@@ -10,7 +10,6 @@ import (
   "github.com/prometheus/prometheus/prompb"
   "container/list"
 
-  main "github.com/szibis/prometheus-governance-proxy"
   "github.com/szibis/prometheus-governance-proxy/plugins"
 )
 
