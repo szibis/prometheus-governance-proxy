@@ -1,4 +1,4 @@
-apackage send
+package send
 
 import (
     "bytes"
