@@ -3,19 +3,24 @@ package plugins
 import (
 	"fmt"
 	"sync"
+	"container/list"
+
+	"github.com/szibis/prometheus-governance-proxy/config"
+	"github.com/szibis/prometheus-governance-proxy/stats"
+	"github.com/szibis/prometheus-governance-proxy/metrics"
 )
 
 type Cardinality struct {
-	config *main.Config
+	config *config.Config
 }
 
-func NewCardinality(config *main.Config) *Cardinality {
+func NewCardinality(config *config.Config) *Cardinality {
 	return &Cardinality{config: config}
 }
 
-func (c *Cardinality) Handle(metricName string, labelName string, tagData *main.TagData, stats *main.Stats) {
+func (c *Cardinality) Handle(metricName string, labelName string, tagData *metrics.TagData, stats *stats.Stats) {
 
-	metricLabelsIntf, ok := main.MetricsData.Metrics.Load(metricName)
+	metricLabelsIntf, ok := metrics.MetricsData.Metrics.Load(metricName)
 	if !ok {
 		return // No metric found, nothing to clean up
 	}
@@ -26,7 +31,7 @@ func (c *Cardinality) Handle(metricName string, labelName string, tagData *main.
 	case "drop_metric":
 		if tagData.Cardinality > c.config.CardinalityLimit.Limit {
 			fmt.Println("Dropping metric due to cardinality limit for metric:", metricName, "and tag:", labelName)
-			main.MetricsData.Metrics.Delete(metricName)
+			metrics.MetricsData.Metrics.Delete(metricName)
 
 			// Increment DroppedMetrics counter
 			stats.DroppedMetrics++
@@ -44,7 +49,7 @@ func (c *Cardinality) Handle(metricName string, labelName string, tagData *main.
 }
 
 // Given a map and an index n, it returns the name of the nth key.
-func getNthKey(m map[string]*TagData, n int) string {
+func getNthKey(m map[string]*metrics.TagData, n int) string {
   i := 0
   for key := range m {
     if i == n {

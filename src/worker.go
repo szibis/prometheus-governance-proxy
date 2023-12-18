@@ -1,25 +1,80 @@
-package main
+package worker
 
 import (
-  "fmt"
-  "time"
-  "bytes"
-  "sync"
-  "container/list"
+	"fmt"
+	"time"
+	"sync"
+	"encoding/json"
+	"log"
 
-  "github.com/golang/snappy"
-  "github.com/golang/protobuf/proto"
-  "github.com/prometheus/prometheus/prompb"
+	"github.com/prometheus/prometheus/prompb"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/proto"
+
+	"github.com/szibis/prometheus-governance-proxy/config"
+	"github.com/szibis/prometheus-governance-proxy/stats"
+	"github.com/szibis/prometheus-governance-proxy/metrics"
+  "github.com/szibis/prometheus-governance-proxy/send"
 )
 
-// Define WorkItem outside for your use case
 type WorkItem struct {
-    ts prompb.TimeSeries
-    endpoints []string
-    debug bool
+    Ts         prompb.TimeSeries
+    Endpoints  []string
+    Debug      bool
 }
 
-func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration, stats *Stats) {
+var lock = sync.RWMutex{}
+
+// Hash function to create a consistent hash of the metric name
+func hash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
+}
+
+func getBytesSize(batch []prompb.TimeSeries) int {
+	// The WriteRequest is what gets sent over the wire
+	req := &prompb.WriteRequest{
+		Timeseries: batch,
+	}
+
+	// We marshal the WriteRequest to a byte slice
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return 0
+	}
+
+	// Return length of byte slice
+	return len(data)
+}
+
+func logJSON(i interface{}) {
+	bytes, err := json.Marshal(i)
+	if err != nil {
+		log.Printf("Could not encode info: %v", err)
+		return
+	}
+	log.Println(string(bytes))
+}
+
+func LogStats(stats *stats.Stats, period time.Duration) {
+	ticker := time.NewTicker(period)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		logJSON(stats)
+
+		// Reset the metrics after logging.
+		stats.ProcessedMetrics = 0
+		stats.ProcessedBytes = 0
+		stats.DroppedMetrics = 0
+		stats.DroppedTags = 0
+	}
+}
+
+// Worker function
+func Worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration, stats *stats.Stats) {
 
     batches := make(map[uint32][]prompb.TimeSeries)
     timers := make(map[uint32]*time.Timer)
@@ -29,7 +84,7 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
         var metricNameValue string
 
         // Find the value of the __name__ label
-        for _, label := range item.ts.Labels {
+        for _, label := range item.Ts.Labels {
             if label.Name == "__name__" {
                 metricNameValue = label.Value
                 break
@@ -42,9 +97,9 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
         }
 
         // Create a consistent hash of the metric name value
-        hash := hash(metricNameValue)
+        hash := Hash(metricNameValue)
         lock.Lock()
-        if item.debug {
+        if item.Debug {
             fmt.Printf("Debug: Primary Hash(%s) = %d\n", metricNameValue, hash)
         }
 
@@ -61,27 +116,27 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
         // If only specific tag in the metric requires dropping
         if isTagToBeDropped {
             stats.DroppedTags++
-            // Add the logic to drop the tag from the item.ts
+            // Add the logic to drop the tag from the item.Ts
             // Replace with your actual logic to drop tag
         }
 
         // Add the TimeSeries to the appropriate batch
-        batches[hash] = append(batches[hash], item.ts)
+        batches[hash] = append(batches[hash], item.Ts)
         stats.ProcessedMetrics++
 
         // If the batch is full, send it
         if len(batches[hash]) == batchSize {
             // Increase processed bytes based on the data size
-            stats.ProcessedBytes += int64(getBytesSize(batches[hash]))
+            stats.ProcessedBytes += int64(GetBytesSize(batches[hash]))
 
             // Use the hash to select an endpoint
-            endpoint := item.endpoints[hash%uint32(len(item.endpoints))]
-            if item.debug {
+            endpoint := item.Endpoints[hash%uint32(len(item.Endpoints))]
+            if item.Debug {
                 fmt.Printf("Debug: For hash %d, Endpoint: %s is chosen for sending\n", hash, endpoint)
             }
 
             // Send the batch to the selected endpoint
-            send(endpoint, batches[hash], item.debug)
+            Send(endpoint, batches[hash], item.Debug)
 
             // Clear the batch
             batches[hash] = nil
@@ -95,8 +150,8 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
 
             lock.Unlock() // unlock here before setting AfterFunc
 
-            endpoint := item.endpoints[hash%uint32(len(item.endpoints))]
-            if item.debug {
+            endpoint := item.Endpoints[hash%uint32(len(item.Endpoints))]
+            if item.Debug {
                 fmt.Printf("Debug: For hash %d, Endpoint: %s is chosen for timer\n", hash, endpoint)
             }
 
@@ -106,13 +161,13 @@ func worker(workItems <-chan WorkItem, batchSize int, releaseAfter time.Duration
                 defer lock.Unlock()
 
                 // Increase processed bytes here
-                stats.ProcessedBytes += int64(getBytesSize(batches[hash]))
+                stats.ProcessedBytes += int64(GetBytesSize(batches[hash]))
 
                 // Use the hash to select an endpoint
-                endpoint := item.endpoints[hash%uint32(len(item.endpoints))]
+                endpoint := item.Endpoints[hash%uint32(len(item.Endpoints))]
 
                 // Send the batch to the selected endpoint
-                send(endpoint, batches[hash], item.debug)
+                Send(endpoint, batches[hash], item.Debug)
 
                 // Clear the batch
                 batches[hash] = nil

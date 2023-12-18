@@ -1,5 +1,5 @@
 # Use latest official Go image from the Docker Hub
-FROM golang:1.21-alpine3.18
+FROM golang:1.21
 
 ENV GO111MODULE=on
 
@@ -7,10 +7,10 @@ ENV GO111MODULE=on
 WORKDIR /app
 
 # Copy everything from the current directory to the Working Directory inside the container
-COPY src/*.go .
+COPY src/ .
 
 # Init go modules
-RUN go mod init prometheus-governance-proxy && go mod tidy
+RUN go mod init github.com/szibis/prometheus-governance-proxy && go mod tidy && go get
 
 # Run unit tests
 RUN go test -bench=. -benchtime=10s
