@@ -15,24 +15,12 @@ import (
 	"github.com/szibis/prometheus-governance-proxy/worker"
   "github.com/szibis/prometheus-governance-proxy/config"
   "github.com/szibis/prometheus-governance-proxy/metrics"
-  "github.com/szibis/prometheus-governance-proxy/plugins"
 )
-
-type TagData struct {
-       Cardinality int
-       Values      *list.List
-       Capacity    int
-}
 
 func HandleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- worker.WorkItem, endpoints []string, config *config.Config, stats *stats.Stats) {
 	if r.Method != http.MethodPost {
 		return
 	}
-
-  var cardinalityPlugin *plugins.Cardinality
-  if config.CardinalityLimit.Enable {
-      cardinalityPlugin = plugins.NewCardinality(config)
-  }
 
 	compressed, _ := ioutil.ReadAll(r.Body)
 	data, err := snappy.Decode(nil, compressed)
@@ -103,16 +91,16 @@ func HandleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- work
 				tagData.Cardinality++
 				tagData.Values.PushBack(label.Value)
 
-				if tagData.Values != nil && tagData.Values.Len() > tagData.Capacity {
+				// Check if the list's length has exceeded its capacity
+				if tagData.Values.Len() > tagData.Capacity {
 					firstElement := tagData.Values.Front()
 					if firstElement != nil {
 						tagData.Values.Remove(firstElement)
 					}
 				}
 
-				if cardinalityPlugin != nil {
-					cardinalityPlugin.Handle(metricName, label.Name, tagData, stats)
-				}
+				// Save the cardinality back to metrics
+				metricsCardinality[metricName][label.Name] = tagData.Cardinality
 
 				metricLabels.Store(label.Name, tagData)
 			}
@@ -127,18 +115,18 @@ func HandleMetrics(w http.ResponseWriter, r *http.Request, workItems chan<- work
 		}
 	}
 
-	// Filter the counters based on the jsonMinCardinality
-  filteredMetricsCardinality := make(map[string]map[string]int)
-  for metricName, labels := range metricsCardinality {
-    for labelName, count := range labels {
-      if count >= config.JsonMinCardinality {  // fixed field name
-        if filteredMetricsCardinality[metricName] == nil {
-          filteredMetricsCardinality[metricName] = make(map[string]int)
-        }
-        filteredMetricsCardinality[metricName][labelName] = count
-      }
-    }
-  }
+	// Filter the counters based on the JsonMinCardinality
+	filteredMetricsCardinality := make(map[string]map[string]int)
+	for metricName, labels := range metricsCardinality {
+		for labelName, count := range labels {
+			if count >= config.JsonMinCardinality { // fixed field name
+				if filteredMetricsCardinality[metricName] == nil {
+					filteredMetricsCardinality[metricName] = make(map[string]int)
+				}
+				filteredMetricsCardinality[metricName][labelName] = count
+			}
+		}
+	}
 
 	// Convert the result to JSON
 	result, err := json.Marshal(filteredMetricsCardinality)

@@ -43,11 +43,11 @@ func main() {
   go worker.LogStats(stat, time.Duration(conf.StatsIntervalSeconds)*time.Second)
 
   http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
-    handle.HandleMetrics(r, workItems, endpoints, conf, stat)
+      handle.HandleMetrics(w, r, workItems, endpoints, conf, stat)
   })
 
   http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
-  	api.HandleMetricsCardinality(w, conf)
+      api.HandleMetricsCardinality(w, conf)
   })
 
 	// Expose Prometheus metrics

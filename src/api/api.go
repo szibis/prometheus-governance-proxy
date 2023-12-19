@@ -11,6 +11,6 @@ import (
 func HandleMetricsCardinality(w http.ResponseWriter, configCh *config.Config) {
   filteredMetricsData := metrics.GetMetricsData(configCh.JsonMinCardinality)
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{"metrics": filteredMetricsData})
+  w.Header().Set("Content-Type", "application/json")
+  json.NewEncoder(w).Encode(map[string]interface{}{"metrics": filteredMetricsData})
 }
