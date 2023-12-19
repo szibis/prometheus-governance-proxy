@@ -2,12 +2,11 @@ package plugins
 
 import (
 	"fmt"
-	"sync"
-	"container/list"
+  "sync"
 
 	"github.com/szibis/prometheus-governance-proxy/config"
 	"github.com/szibis/prometheus-governance-proxy/stats"
-	"github.com/szibis/prometheus-governance-proxy/metrics"
+  "github.com/szibis/prometheus-governance-proxy/metrics"
 )
 
 type Cardinality struct {

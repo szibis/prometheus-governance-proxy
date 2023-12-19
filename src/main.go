@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/szibis/prometheus-governance-proxy/config"
 	"github.com/szibis/prometheus-governance-proxy/worker"
-	"github.com/szibis/prometheus-governance-proxy/metrics"
+	"github.com/szibis/prometheus-governance-proxy/handle"
 	"github.com/szibis/prometheus-governance-proxy/stats"
   "github.com/szibis/prometheus-governance-proxy/api"
 )
@@ -43,9 +42,9 @@ func main() {
 	// Log the stats periodically.
 	go worker.LogStats(stat, time.Duration(conf.StatsIntervalSeconds)*time.Second)
 
-	http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
-		metrics.Handle(workItems, endpoints, conf, stat, r)  // Passing the reference to handleMetrics
-	})
+  http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
+    handle.HandleMetrics(r, workItems, endpoints, conf, stat)
+  })
 
 	http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleMetricsCardinality(w, conf)

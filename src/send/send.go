@@ -1,14 +1,14 @@
 package send
 
 import (
-    "bytes"
-    "fmt"
-    "io/ioutil"
-    "net/http"
+  "bytes"
+  "fmt"
+  "io/ioutil"
+  "net/http"
+  "time"
 
-    "google.golang.org/protobuf"
-    "github.com/golang/snappy"
-    "github.com/prometheus/prometheus/prompb"
+  "github.com/golang/snappy"
+  "github.com/prometheus/prometheus/prompb"
 )
 
 // Send function sends the given metrics to the given endpoint
@@ -19,7 +19,7 @@ func Send(endpoint string, ts []prompb.TimeSeries, debug bool) {
     }
 
     // Marshal the WriteRequest to a byte slice
-    data, err := proto.Marshal(req)
+    data, err := req.Marshal()
     if err != nil {
         fmt.Printf("Could not marshal the WriteRequest: %v\n", err)
         return
@@ -57,8 +57,8 @@ func Send(endpoint string, ts []prompb.TimeSeries, debug bool) {
     // Close the response body
     resp.Body.Close()
 
-    // Check the response code
-    if resp.StatusCode != http.StatusOK {
-        fmt.Printf("Received a non-200 response code: %d\n", resp.StatusCode)
+    // Check the response code, now for both 200 and 204
+    if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+        fmt.Printf("Received a non-200/204 response code: %d\n", resp.StatusCode)
     }
 }

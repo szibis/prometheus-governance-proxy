@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
   
-	"google.golang.org/protobuf"
 	"github.com/prometheus/prometheus/prompb"
 )
 
@@ -28,7 +27,7 @@ func getBytesSize(batch []prompb.TimeSeries) int {
 		Timeseries: batch,
 	}
 
-	data, err := proto.Marshal(req)
+  data, err := req.Marshal()
 	if err != nil {
 		return 0
 	}

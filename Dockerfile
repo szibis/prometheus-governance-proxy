@@ -10,7 +10,9 @@ WORKDIR /app
 COPY src/ .
 
 # Init go modules
-RUN go mod init github.com/szibis/prometheus-governance-proxy && go mod tidy && go get
+RUN go clean -modcache && go mod init github.com/szibis/prometheus-governance-proxy && \
+    go get -t -u github.com/szibis/prometheus-governance-proxy/... && \
+    go mod tidy
 
 # Run unit tests
 RUN go test -bench=. -benchtime=10s
