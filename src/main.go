@@ -40,15 +40,15 @@ func main() {
 	}
 
 	// Log the stats periodically.
-	go worker.LogStats(stat, time.Duration(conf.StatsIntervalSeconds)*time.Second)
+  go worker.LogStats(stat, time.Duration(conf.StatsIntervalSeconds)*time.Second)
 
   http.HandleFunc("/write", func(w http.ResponseWriter, r *http.Request) {
     handle.HandleMetrics(r, workItems, endpoints, conf, stat)
   })
 
-	http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
-		api.HandleMetricsCardinality(w, conf)
-	})
+  http.HandleFunc("/metrics_cardinality", func(w http.ResponseWriter, r *http.Request) {
+  	api.HandleMetricsCardinality(w, conf)
+  })
 
 	// Expose Prometheus metrics
 	http.Handle("/metrics", promhttp.Handler())
